@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Footer from '../components/Footer';
 import Reveal from '../components/Reveal';
@@ -11,19 +12,54 @@ import {
   ShieldClockIcon,
   DownloadIcon,
 } from '../components/icons';
-import { getGroupBySlug, getProductBySlug } from '../data/productGroups';
+import { fetchProductBySlug } from '../api/productGroups.api';
 import { ROUTES } from '../constants/routes';
 import './ProductDetail.css';
+import Breadcrumb from '../components/Breadcrumb';
 
 const applicationIcons = [TileGridIcon, GraniteColumnIcon, MosaicIcon, StaircaseIcon, CountertopIcon];
 
 function ProductDetail() {
   const { groupSlug, productSlug } = useParams();
-  const group = getGroupBySlug(groupSlug);
-  const product = getProductBySlug(groupSlug, productSlug);
-  const detail = product?.detail;
+  const [group, setGroup] = useState(null);
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  if (!group || !product) {
+  useEffect(() => {
+    let isMounted = true;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchProductBySlug(groupSlug, productSlug);
+        if (isMounted) {
+          setGroup(data.group);
+          setProduct(data.product);
+        }
+      } catch (err) {
+        if (isMounted) setError(err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      isMounted = false;
+    };
+  }, [groupSlug, productSlug]);
+
+  if (loading) {
+    return (
+      <section className="product-detail-empty">
+        <p>Loading...</p>
+      </section>
+    );
+  }
+
+  if (error || !group || !product) {
     return (
       <section className="product-detail-empty">
         <h1>Product not found</h1>
@@ -34,15 +70,19 @@ function ProductDetail() {
     );
   }
 
+  const detail = product.detail;
+
   if (!detail) {
     return (
       <>
         <section className="product-detail-empty">
-          <div className="breadcrumb">
-            <span className="breadcrumb__item">Product Group</span>
-            <ChevronRightIcon color="#45474A" />
-            <span className="breadcrumb__item breadcrumb__item--active">{product.name}</span>
-          </div>
+          <Breadcrumb
+            items={[
+              { label: 'Product Group', to: ROUTES.productGroups },
+              { label: group.title, to: ROUTES.productGroupDetail(group.slug) },
+              { label: product.name },
+            ]}
+          />
           <h1>{product.name}</h1>
           <p>{product.description}</p>
           <p className="product-detail-empty__note">Full technical specifications are coming soon.</p>
@@ -55,25 +95,19 @@ function ProductDetail() {
     );
   }
 
+  const sdsDoc = product.documents?.find((doc) => doc.type === 'sds');
+  const tdsDoc = product.documents?.find((doc) => doc.type === 'tds');
+
   return (
     <>
       <section className="product-detail">
-        <div className="breadcrumb">
-          {detail.breadcrumb.map((crumb, index) => (
-            <span key={crumb} className="breadcrumb__crumb">
-              {index > 0 && <ChevronRightIcon color="#45474A" />}
-              <span
-                className={
-                  index === detail.breadcrumb.length - 1
-                    ? 'breadcrumb__item breadcrumb__item--active'
-                    : 'breadcrumb__item'
-                }
-              >
-                {crumb}
-              </span>
-            </span>
-          ))}
-        </div>
+        <Breadcrumb
+          items={[
+            { label: 'Product Group', to: ROUTES.productGroups },
+            { label: group.title, to: ROUTES.productGroupDetail(group.slug) },
+            { label: product.name },
+          ]}
+        />
 
         <div className="product-detail__grid">
           <Reveal as="div" className="product-card">
@@ -83,12 +117,12 @@ function ProductDetail() {
             </div>
             <p className="product-card__summary">{detail.summary}</p>
             <div className="product-card__image-wrap">
-              <img className="product-card__image" src={detail.image} alt={detail.heading} />
+              <img className="product-card__image" src={detail.image_url} alt={detail.heading} />
             </div>
             <div className="product-card__features">
               <h4 className="product-card__features-title">Key Features</h4>
               <ul className="product-card__features-list">
-                {detail.keyFeatures.map((feature) => (
+                {(detail.key_features ?? []).map((feature) => (
                   <li key={feature}>{feature}</li>
                 ))}
               </ul>
@@ -99,7 +133,7 @@ function ProductDetail() {
             <Reveal as="div" delay={100} className="side-card">
               <h4 className="side-card__title">Typical Applications</h4>
               <div className="applications-grid">
-                {detail.typicalApplications.map((application, index) => {
+                {(detail.typical_applications ?? []).map((application, index) => {
                   const Icon = applicationIcons[index % applicationIcons.length];
                   return (
                     <div key={application} className="applications-grid__item">
@@ -116,7 +150,7 @@ function ProductDetail() {
             <Reveal as="div" delay={200} className="side-card">
               <h4 className="side-card__title">Technical Highlights</h4>
               <div className="tech-table">
-                {detail.technicalHighlights.map((row, index) => (
+                {(detail.technicalHighlights ?? []).map((row, index) => (
                   <div
                     key={row.label}
                     className={index % 2 === 1 ? 'tech-table__row tech-table__row--shaded' : 'tech-table__row'}
@@ -127,11 +161,21 @@ function ProductDetail() {
                 ))}
               </div>
               <div className="side-card__actions">
-                <button type="button" className="button-outline-dark">
+                <button
+                  type="button"
+                  className="button-outline-dark"
+                  onClick={() => sdsDoc && window.open(sdsDoc.file_url, '_blank')}
+                  disabled={!sdsDoc}
+                >
                   <ShieldClockIcon width={14} height={18} />
                   View SDS
                 </button>
-                <button type="button" className="button-dark">
+                <button
+                  type="button"
+                  className="button-dark"
+                  onClick={() => tdsDoc && window.open(tdsDoc.file_url, '_blank')}
+                  disabled={!tdsDoc}
+                >
                   <DownloadIcon width={14} height={14} />
                   Download TDS
                 </button>
@@ -141,7 +185,7 @@ function ProductDetail() {
         </div>
 
         <div className="application-images">
-          {detail.applicationImages.map((image, index) => (
+          {(detail.applicationImages ?? []).map((image, index) => (
             <Reveal key={image} delay={index * 100} className="application-images__item">
               <img src={image} alt="" />
             </Reveal>

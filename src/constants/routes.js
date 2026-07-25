@@ -5,4 +5,5 @@ export const ROUTES = {
   productDetail: (groupSlug, productSlug) => `/product-groups/${groupSlug}/${productSlug}`,
   about: '/about',
   contact: '/contact',
+  
 };
