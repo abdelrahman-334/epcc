@@ -11,11 +11,7 @@ jobs:
     steps:
       - name: Ping Supabase
         run: |
-          curl -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/product_details?select=id&limit=1" \
+          curl -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/product_details?select=*&limit=1" \
             -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
-      -  name: Debug check
-         run: |
-          echo "URL length: ${#SUPABASE_URL}"
-         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+
