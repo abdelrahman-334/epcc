@@ -1,8 +1,7 @@
 name: Supabase Keep-Alive
-
 on:
   schedule:
-    - cron: '0 9 * * 1,4'  # Mondays & Thursdays at 9am UTC
+    - cron: '0 9 * * *'   # every day at 9am UTC
   workflow_dispatch:        # lets you trigger it manually to test
 
 jobs:
@@ -11,7 +10,13 @@ jobs:
     steps:
       - name: Ping Supabase
         run: |
-          curl -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/product_details?select=*&limit=1" \
+          curl -f -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/product_details?select=*&limit=1" \
             -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
 
+      - name: Notify on failure
+        if: failure()
+        run: |
+          curl -X POST https://api.github.com/repos/${{ github.repository }}/issues \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -d '{"title":"Supabase keep-alive failed","body":"The daily ping to Supabase failed on '"$(date)"'. Check if the project is paused."}'
